@@ -4,7 +4,6 @@
  * */
  use std::env;
 
-
  const USAGE: &str = "
  Usage: subnet_helper [OPTIONS] CIDR_BLOCK
  Options:
@@ -27,9 +26,7 @@
      2_u32.pow(32-host_bits)
  
  }
- 
- 
- 
+   
  fn get_subnet_mask_bits(cidr_block : &str) -> String{
      let mut subnet_mask = String::new();
      let subnet_parts: Vec<&str> = cidr_block.split('/').collect();
@@ -47,7 +44,6 @@
      return subnet_mask;
  }
  
- 
  fn get_subnet_mask_dec(cidr_block: &str) -> Vec<u8> {
      let subnet_parts: Vec<&str> = cidr_block.split('/').collect();
      let prefix_length: u8 = subnet_parts[1].parse().expect("Unable to parse prefix length");
@@ -64,8 +60,7 @@
      subnet_mask
  }
  
- 
- fn get_network_start(cidr_block : Vec<u8>, subnet_mask : Vec<u8>) -> Vec<u8> {
+fn get_network_start(cidr_block : Vec<u8>, subnet_mask : Vec<u8>) -> Vec<u8> {
  
      let mut network_start: Vec<u8> = Vec::new();
      for i in 0..4{
@@ -88,16 +83,12 @@
  
      cidr_block_vec
  }
- 
- 
- 
- fn list_ips_from_subnet(cidr_block : &str){
+  
+fn list_ips_from_subnet(cidr_block : &str){
      println!("{}", cidr_block);
  
      let subnet_mask : Vec<u8> = get_subnet_mask_dec(cidr_block);
- 
      let network_vec = cidr_str_to_network_vec(cidr_block);
- 
      let network_start: Vec<u8> = get_network_start(network_vec, subnet_mask);
      let total_ips = total_ips_from_cidr(cidr_block);
  
@@ -124,12 +115,10 @@
  
  fn main() {
     let args: Vec<String> = env::args().collect();
- 
     if args.len() < 2 || (&args[1] == "-h"){
          println!("{}", USAGE);
          return;
     }
- 
  
      let subnet = &args[1];
      println!("Input subnet in CIDR notation: {}", subnet);
@@ -140,7 +129,6 @@
          println!("Network address: {}", subnet_parts[0]);
          println!("Prefix length: {}", subnet_parts[1]);
  
-         // Parse prefix length
          let host_bits_prefix: u32 = subnet_parts[1].parse::<u32>().expect("Unable to parse CIDR block");
  
          println!("Host bits prefix: {}", host_bits_prefix);
@@ -153,9 +141,7 @@
      println!("Available IPs within the range: {}", subnet);
      list_ips_from_subnet(subnet);
  }
- 
- 
- 
+   
  #[cfg(test)]
  mod tests {
      use super::*;

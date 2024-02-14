@@ -2,190 +2,143 @@
  * Basic subnet expansion tool in Rust to learn Rust!
  * By: sc1341
  * */
- use std::env;
 
- const USAGE: &str = "
- Usage: subnet_helper [OPTIONS] CIDR_BLOCK
- Options:
-   -h, --help      Show this help message and exit.
-   -v, --version   Display the version information.
- 
- Examples:
-   subnet_helper 192.168.1.0/24   List all IP addresses in the 192.168.1.0 subnet.
-   subnet_helper -h               Show the help message.
- ";
- 
- fn total_ips_from_subnet(prefix_length: u32) -> u32 {
-     2_u32.pow(32-prefix_length)
- }
- 
- fn total_ips_from_cidr(cidr_block : &str) -> u32{
-     let subnet_parts : Vec<&str> = cidr_block.split('/').collect();
-     let host_bits : u32 = subnet_parts[1].parse::<u32>().expect("");
- 
-     2_u32.pow(32-host_bits)
- 
- }
-   
- fn get_subnet_mask_bits(cidr_block : &str) -> String{
-     let mut subnet_mask = String::new();
-     let subnet_parts: Vec<&str> = cidr_block.split('/').collect();
-     let host_bits : i32 = subnet_parts[1].parse::<i32>().expect("Unable to parse CIDR block");
-     for n in 1..33{
-         if n <= host_bits{
-             subnet_mask.push('1');
-         } else {
-             subnet_mask.push('0');
-         }
-         if (n % 8) == 0 && n != 32{
-             subnet_mask.push('.');
-         }
-     }
-     return subnet_mask;
- }
- 
- fn get_subnet_mask_dec(cidr_block: &str) -> Vec<u8> {
-     let subnet_parts: Vec<&str> = cidr_block.split('/').collect();
-     let prefix_length: u8 = subnet_parts[1].parse().expect("Unable to parse prefix length");
- 
-     // Initialize the subnet mask as a 32-bit integer.
-     let mask: u32 = 0xFFFFFFFF << (32 - prefix_length);
- 
-     // Convert the mask into a Vec<u8> representation.
-     let mut subnet_mask: Vec<u8> = Vec::new();
-     for i in (0..4).rev() {
-         subnet_mask.push(((mask >> (i * 8)) & 0xFF) as u8);
-     }
-     println!("Subnet Mask: {}.{}.{}.{}", subnet_mask[0], subnet_mask[1], subnet_mask[2], subnet_mask[3]);
-     subnet_mask
- }
- 
-fn get_network_start(cidr_block : Vec<u8>, subnet_mask : Vec<u8>) -> Vec<u8> {
- 
-     let mut network_start: Vec<u8> = Vec::new();
-     for i in 0..4{
-         network_start.push(cidr_block[i] & subnet_mask[i]);
-     }
- 
-     println!("Network start: {}.{}.{}.{}", network_start[0], network_start[1], network_start[2], network_start[3]);
-     network_start
- }
- 
- fn cidr_str_to_network_vec(cidr_block: &str) -> Vec<u8> {
-     // Split the CIDR block to get the IP address part.
-     let ip_address_part = cidr_block.split('/').next().expect("Invalid CIDR block format");
- 
-     // Split the IP address into its octets and parse each one into a u8.
-     let cidr_block_vec: Vec<u8> = ip_address_part
-         .split('.')
-         .map(|octet| octet.parse::<u8>().expect("Invalid IP address format"))
-         .collect();
- 
-     cidr_block_vec
- }
-  
-fn list_ips_from_subnet(cidr_block : &str){
-     println!("{}", cidr_block);
- 
-     let subnet_mask : Vec<u8> = get_subnet_mask_dec(cidr_block);
-     let network_vec = cidr_str_to_network_vec(cidr_block);
-     let network_start: Vec<u8> = get_network_start(network_vec, subnet_mask);
-     let total_ips = total_ips_from_cidr(cidr_block);
- 
-     let mut network_address = u32::from(network_start[0]) << 24
-         | u32::from(network_start[1]) << 16
-         | u32::from(network_start[2]) << 8
-         | u32::from(network_start[3]);
- 
-     for _ in 0..total_ips {
-         // Convert back to Vec<u8> to print
-         let ip_address = vec![
-             ((network_address >> 24) & 0xFF) as u8,
-             ((network_address >> 16) & 0xFF) as u8,
-             ((network_address >> 8) & 0xFF) as u8,
-             (network_address & 0xFF) as u8,
-         ];
- 
-         println!("{}.{}.{}.{}", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
- 
-         network_address += 1;
-     }
- }
- 
- 
- fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 || (&args[1] == "-h"){
-         println!("{}", USAGE);
-         return;
+use std::env;
+
+const USAGE: &str = "
+Usage: subnet_helper [OPTIONS] CIDR_BLOCK
+Options:
+  -h, --help      Show this help message and exit.
+  -v, --version   Display the version information.
+
+Examples:
+  subnet_helper 192.168.1.0/24   List all IP addresses in the 192.168.1.0 subnet.
+  subnet_helper -h               Show the help message.
+";
+
+pub struct Subnet {
+    cidr_block: String,
+    subnet_mask: Vec<u8>,
+    network_start: Vec<u8>,
+    total_ips: u32,
+}
+
+impl Subnet {
+    pub fn new(cidr_block: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let parts: Vec<&str> = cidr_block.split('/').collect();
+        if parts.len() != 2 {
+            return Err("CIDR block must be in the format IP/PREFIX".into());
+        }
+        let ip_address = Self::cidr_str_to_network_vec(cidr_block);
+        let subnet_mask = Self::get_subnet_mask_dec(cidr_block)?;
+        let network_start = Self::get_network_start(&ip_address, &subnet_mask)?;
+        let total_ips = Self::total_ips_from_cidr(cidr_block)?;
+
+        Ok(Subnet {
+            cidr_block: cidr_block.to_string(),
+            subnet_mask,
+            network_start,
+            total_ips,
+        })
     }
- 
-     let subnet = &args[1];
-     println!("Input subnet in CIDR notation: {}", subnet);
-     let subnet_parts: Vec<&str> = subnet.split('/').collect(); // Collect into a Vec for indexing
- 
-     if subnet_parts.len() == 2 {
-         // Print the parts
-         println!("Network address: {}", subnet_parts[0]);
-         println!("Prefix length: {}", subnet_parts[1]);
- 
-         let host_bits_prefix: u32 = subnet_parts[1].parse::<u32>().expect("Unable to parse CIDR block");
- 
-         println!("Host bits prefix: {}", host_bits_prefix);
-         println!("Total number of available hosts: {}", total_ips_from_subnet(host_bits_prefix));
-     } else {
-         println!("Invalid CIDR notation.");
-     }
-     let subnet_mask : String = get_subnet_mask_bits(subnet);
-     println!("Subnet mask of {} : {}", subnet, subnet_mask);
-     println!("Available IPs within the range: {}", subnet);
-     list_ips_from_subnet(subnet);
- }
-   
- #[cfg(test)]
- mod tests {
-     use super::*;
- 
-     #[test]
-     fn test_total_ips_from_subnet() {
-         assert_eq!(total_ips_from_subnet(24), 256);
-         assert_eq!(total_ips_from_subnet(30), 4);
-     }
- 
-     #[test]
-     fn test_get_subnet_mask_dec() {
-         // Testing with a /24 prefix
-         let mask_24 = get_subnet_mask_dec("192.168.1.0/24");
-         assert_eq!(mask_24, vec![255, 255, 255, 0]);
- 
-         // Testing with a /16 prefix
-         let mask_16 = get_subnet_mask_dec("192.168.0.0/16");
-         assert_eq!(mask_16, vec![255, 255, 0, 0]);
-     }
- 
-     #[test]
-     fn test_cidr_str_to_network_vec() {
-         let cidr_block = "192.168.1.1/24";
-         let expected_vec = vec![192, 168, 1, 1];
-         assert_eq!(cidr_str_to_network_vec(cidr_block), expected_vec);
- 
-         let cidr_block = "10.0.0.1/16";
-         let expected_vec = vec![10, 0, 0, 1];
-         assert_eq!(cidr_str_to_network_vec(cidr_block), expected_vec);
-     }
- 
-     #[test]
-     fn test_get_network_start() {
-         let ip_vec = vec![192, 168, 1, 10];
-         let subnet_mask = vec![255, 255, 255, 0];
-         let expected_network_start = vec![192, 168, 1, 0];
-         assert_eq!(get_network_start(ip_vec, subnet_mask), expected_network_start);
- 
-         let ip_vec = vec![10, 0, 0, 15];
-         let subnet_mask = vec![255, 255, 0, 0];
-         let expected_network_start = vec![10, 0, 0, 0];
-         assert_eq!(get_network_start(ip_vec, subnet_mask), expected_network_start);
-     }
- 
- 
- }
+
+    fn total_ips_from_cidr(cidr_block: &str) -> Result<u32, Box<dyn std::error::Error>> {
+        let parts: Vec<&str> = cidr_block.split('/').collect();
+        let prefix_length: u32 = parts[1].parse()?;
+        Ok(2_u32.pow(32 - prefix_length))
+    }
+
+    fn get_subnet_mask_dec(cidr_block: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let parts: Vec<&str> = cidr_block.split('/').collect();
+        let prefix_length: u32 = parts[1].parse()?;
+        let mask: u32 = (!0u32).checked_shl(32 - prefix_length).unwrap_or(0);
+        Ok(mask.to_be_bytes().to_vec())
+    }
+
+    fn get_network_start(ip_address: &Vec<u8>, subnet_mask: &Vec<u8>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        ip_address.iter().zip(subnet_mask.iter())
+            .map(|(&ip, &mask)| Ok(ip & mask))
+            .collect()
+    }
+
+    fn cidr_str_to_network_vec(cidr_block: &str) -> Vec<u8> {
+        cidr_block.split('/').next().unwrap()
+            .split('.').map(|octet| octet.parse().unwrap()).collect()
+    }
+
+    pub fn list_ips(&self) {
+        let mut current_ip = u32::from_be_bytes([self.network_start[0], self.network_start[1], self.network_start[2], self.network_start[3]]);
+        for _ in 0..self.total_ips {
+            let ip_bytes = current_ip.to_be_bytes();
+            println!("{}.{}.{}.{}", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
+            current_ip = current_ip.checked_add(1).expect("IP address overflow");
+        }
+    }
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 || args[1] == "-h" || args[1] == "--help" {
+        println!("{}", USAGE);
+        return;
+    }
+
+    let cidr_block = &args[1];
+    match Subnet::new(cidr_block) {
+        Ok(subnet) => {
+            subnet.list_ips();
+        }
+        Err(e) => println!("Error: {}", e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_total_ips_from_cidr() {
+        let cidr_block_24 = "192.168.1.0/24";
+        assert_eq!(Subnet::total_ips_from_cidr(cidr_block_24).unwrap(), 256);
+
+        let cidr_block_30 = "192.168.1.0/30";
+        assert_eq!(Subnet::total_ips_from_cidr(cidr_block_30).unwrap(), 4);
+    }
+
+    #[test]
+    fn test_get_subnet_mask_dec() {
+        let cidr_block_24 = "192.168.1.0/24";
+        assert_eq!(Subnet::get_subnet_mask_dec(cidr_block_24).unwrap(), vec![255, 255, 255, 0]);
+
+        let cidr_block_16 = "192.168.0.0/16";
+        assert_eq!(Subnet::get_subnet_mask_dec(cidr_block_16).unwrap(), vec![255, 255, 0, 0]);
+    }
+
+    #[test]
+    fn test_get_network_start() {
+        let ip_address = vec![192, 168, 1, 10];
+        let subnet_mask = vec![255, 255, 255, 0];
+        let expected_network_start = vec![192, 168, 1, 0];
+        assert_eq!(Subnet::get_network_start(&ip_address, &subnet_mask).unwrap(), expected_network_start);
+
+        let ip_address = vec![10, 0, 0, 15];
+        let subnet_mask = vec![255, 0, 0, 0];
+        let expected_network_start = vec![10, 0, 0, 0];
+        assert_eq!(Subnet::get_network_start(&ip_address, &subnet_mask).unwrap(), expected_network_start);
+    }
+
+    #[test]
+    fn test_cidr_str_to_network_vec() {
+        let cidr_block = "192.168.1.1/24";
+        let expected_vec = vec![192, 168, 1, 1];
+        assert_eq!(Subnet::cidr_str_to_network_vec(cidr_block), expected_vec);
+
+        let cidr_block = "10.0.0.1/16";
+        let expected_vec = vec![10, 0, 0, 1];
+        assert_eq!(Subnet::cidr_str_to_network_vec(cidr_block), expected_vec);
+        
+        let cidr_block = "23.165.24.1/24";
+        let expected_vec = vec![23, 165, 24, 1];
+        assert_eq!(Subnet::cidr_str_to_network_vec(cidr_block), expected_vec);
+    }
+}
